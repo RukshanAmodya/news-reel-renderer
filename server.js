@@ -21,7 +21,7 @@ app.post('/render-reel', async (req, res) => {
     imageUrl,
     audioUrl = DEFAULT_AUDIO_URL,
     badgeText = 'FLASH INFO',
-    subtitleText = 'Les faits essentiels et analyse'
+    subtitleText = 'Dernière Heure'
   } = req.body;
 
   // Strict Validation: prevent empty or corrupted renders
@@ -34,7 +34,7 @@ app.post('/render-reel', async (req, res) => {
 
   const cleanTitle = title.trim();
   const cleanBadge = (badgeText || 'FLASH INFO').trim().toUpperCase();
-  const cleanSubtitle = (subtitleText || 'Les faits essentiels et analyse').trim();
+  const cleanSubtitle = (subtitleText || 'Dernière Heure').trim();
 
   const requestId = Date.now() + '_' + Math.random().toString(36).substring(2, 7);
   const tempImgPath = path.join('/tmp', `img_${requestId}.png`);
@@ -169,23 +169,23 @@ app.post('/render-reel', async (req, res) => {
         const bottom = H - H*0.12;
         let y = bottom;
 
-        // Dynamic Subtitle / Strapline
+        // Footer / Page Name with gold wings
         if(subtitleText){
-          const sf = Math.round(W*0.031);
-          ctx.letterSpacing = '0.01em';
-          setFace(ctx, {family:HEAVY, weight:'500'}, sf);
-          ctx.fillStyle = '#e6ecf5'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+          const sf = Math.round(W*0.033);
+          ctx.letterSpacing = '0.04em';
+          setFace(ctx, {family:HEAVY, weight:'700'}, sf);
+          ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
           ctx.fillText(subtitleText, W/2, y);
           const sw = ctx.measureText(subtitleText).width;
-          ctx.strokeStyle = '#c9a227'; ctx.lineWidth = Math.max(1, W*0.0018);
-          const startX1 = W/2 - sw/2 - W*0.10;
+          ctx.strokeStyle = '#c9a227'; ctx.lineWidth = Math.max(2, W*0.0022);
+          const startX1 = W/2 - sw/2 - W*0.12;
           const endX1 = W/2 - sw/2 - W*0.03;
           const startX2 = W/2 + sw/2 + W*0.03;
-          const endX2 = W/2 + sw/2 + W*0.10;
+          const endX2 = W/2 + sw/2 + W*0.12;
           ctx.beginPath(); ctx.moveTo(startX1, y - sf*0.32); ctx.lineTo(endX1, y - sf*0.32); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(startX2, y - sf*0.32); ctx.lineTo(endX2, y - sf*0.32); ctx.stroke();
           ctx.textAlign = 'left';
-          y -= sf*2.2;
+          y -= sf*2.4;
         }
 
         // Gold rule with a tricolor center
@@ -205,15 +205,15 @@ app.post('/render-reel', async (req, res) => {
         y -= L.lines.length * L.size * L.lh;
         drawLines(ctx, L, padX, y, 'left', '#ffffff', '#f0b429');
 
-        // Dynamic Category Badge
+        // Dynamic Category Badge (Top Blue Pill)
         if(badgeText){
-          const bs = Math.round(W*0.030);
-          const bh = bs*1.68;
+          const bs = Math.round(W*0.032);
+          const bh = bs*1.72;
           const by = y - H*0.028 - bh;
-          ctx.letterSpacing = '0.06em';
-          setFace(ctx, {family:HEAVY, weight:'700'}, bs);
+          ctx.letterSpacing = '0.08em';
+          setFace(ctx, {family:HEAVY, weight:'800'}, bs);
           const tw = ctx.measureText(badgeText).width;
-          const icon = bs*1.15, gap = bs*0.62, ph = bs*0.85;
+          const icon = bs*1.15, gap = bs*0.62, ph = bs*0.95;
           const bw = ph + icon + gap + tw + ph;
           ctx.fillStyle = '#123f70';
           ctx.beginPath(); ctx.roundRect(padX, by, bw, bh, bh*0.28); ctx.fill();
