@@ -16,11 +16,25 @@ app.get('/health', (req, res) => {
 });
 
 app.post('/render-reel', async (req, res) => {
-  const { title, imageUrl, audioUrl = DEFAULT_AUDIO_URL } = req.body;
+  const {
+    title,
+    imageUrl,
+    audioUrl = DEFAULT_AUDIO_URL,
+    badgeText = 'FLASH INFO',
+    subtitleText = 'Les faits essentiels et analyse'
+  } = req.body;
 
-  if (!title || !imageUrl) {
-    return res.status(400).json({ error: 'title and imageUrl are required' });
+  // Strict Validation: prevent empty or corrupted renders
+  if (!title || typeof title !== 'string' || title.trim().length === 0) {
+    return res.status(400).json({ error: 'Valid title is required' });
   }
+  if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('http')) {
+    return res.status(400).json({ error: 'Valid imageUrl is required' });
+  }
+
+  const cleanTitle = title.trim();
+  const cleanBadge = (badgeText || 'FLASH INFO').trim().toUpperCase();
+  const cleanSubtitle = (subtitleText || 'Les faits essentiels et analyse').trim();
 
   const requestId = Date.now() + '_' + Math.random().toString(36).substring(2, 7);
   const tempImgPath = path.join('/tmp', `img_${requestId}.png`);
@@ -28,14 +42,15 @@ app.post('/render-reel', async (req, res) => {
   const outVideoPath = path.join('/tmp', `out_${requestId}.mp4`);
 
   try {
-    console.log(`[${requestId}] 1. Downloading source image...`);
+    console.log(`[${requestId}] 1. Downloading source image from ${imageUrl}...`);
     const imgRes = await fetch(imageUrl);
+    if (!imgRes.ok) throw new Error(`Failed to fetch source image: ${imgRes.status} ${imgRes.statusText}`);
     const imgArr = await imgRes.arrayBuffer();
     const imageDataUrl = "data:image/jpeg;base64," + Buffer.from(imgArr).toString('base64');
 
     console.log(`[${requestId}] 2. Rendering 1080x1920 Template D layout in Browserless...`);
     const code = `export default async ({ page, context }) => {
-      const { title, imageDataUrl } = context;
+      const { title, imageDataUrl, badgeText, subtitleText } = context;
 
       await page.setContent('<div style="position:relative; width:1080px; height:1920px;"><canvas id="c" width="1080" height="1920" style="background:#0b162d; width:1080px; height:1920px;"></canvas></div>');
 
@@ -47,7 +62,7 @@ app.post('/render-reel', async (req, res) => {
         await document.fonts.ready;
       });
 
-      await page.evaluate(async (title, imageDataUrl) => {
+      await page.evaluate(async (title, imageDataUrl, badgeText, subtitleText) => {
         const canvas = document.getElementById('c');
         const ctx = canvas.getContext('2d');
         const W = 1080, H = 1920;
@@ -154,14 +169,14 @@ app.post('/render-reel', async (req, res) => {
         const bottom = H - H*0.12;
         let y = bottom;
 
-        const sub = "Décryptage, chiffres et analyse";
-        if(sub){
+        // Dynamic Subtitle / Strapline
+        if(subtitleText){
           const sf = Math.round(W*0.031);
           ctx.letterSpacing = '0.01em';
           setFace(ctx, {family:HEAVY, weight:'500'}, sf);
           ctx.fillStyle = '#e6ecf5'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-          ctx.fillText(sub, W/2, y);
-          const sw = ctx.measureText(sub).width;
+          ctx.fillText(subtitleText, W/2, y);
+          const sw = ctx.measureText(subtitleText).width;
           ctx.strokeStyle = '#c9a227'; ctx.lineWidth = Math.max(1, W*0.0018);
           const startX1 = W/2 - sw/2 - W*0.10;
           const endX1 = W/2 - sw/2 - W*0.03;
@@ -173,6 +188,7 @@ app.post('/render-reel', async (req, res) => {
           y -= sf*2.2;
         }
 
+        // Gold rule with a tricolor center
         const rw = W - padX*2, rh = Math.max(2, H*0.0042);
         ctx.fillStyle = '#c9a227'; ctx.fillRect(padX, y - rh, rw, rh);
         const cw = rw*0.42, cx0 = W/2 - cw/2;
@@ -183,29 +199,30 @@ app.post('/render-reel', async (req, res) => {
         }
         y -= H*0.045;
 
+        // Dynamic Headline
         const tokens = tokenize(title, '');
         const L = fit(ctx, tokens, W - padX*2, H*0.30, W*0.082, 1.08, '-0.02em', {family:HEAVY, weight:'800'});
         y -= L.lines.length * L.size * L.lh;
         drawLines(ctx, L, padX, y, 'left', '#ffffff', '#f0b429');
 
-        const bs = Math.round(W*0.030);
-        const label = "QUESTION DU JOUR";
-        if(label){
+        // Dynamic Category Badge
+        if(badgeText){
+          const bs = Math.round(W*0.030);
           const bh = bs*1.68;
           const by = y - H*0.028 - bh;
           ctx.letterSpacing = '0.06em';
           setFace(ctx, {family:HEAVY, weight:'700'}, bs);
-          const tw = ctx.measureText(label).width;
+          const tw = ctx.measureText(badgeText).width;
           const icon = bs*1.15, gap = bs*0.62, ph = bs*0.85;
           const bw = ph + icon + gap + tw + ph;
           ctx.fillStyle = '#123f70';
           ctx.beginPath(); ctx.roundRect(padX, by, bw, bh, bh*0.28); ctx.fill();
           calendarIcon(ctx, padX + ph, by + (bh - icon)/2, icon, '#ffffff');
           ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
-          ctx.fillText(label, padX + ph + icon + gap, by + bh/2 + bs*0.04);
+          ctx.fillText(badgeText, padX + ph + icon + gap, by + bh/2 + bs*0.04);
           ctx.textBaseline = 'alphabetic';
         }
-      }, title, imageDataUrl);
+      }, cleanTitle, imageDataUrl, cleanBadge, cleanSubtitle);
 
       const canvasEl = await page.$('#c');
       const screenshot = await canvasEl.screenshot({ type: 'png' });
@@ -217,10 +234,16 @@ app.post('/render-reel', async (req, res) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         code,
-        context: { title, imageDataUrl }
+        context: {
+          title: cleanTitle,
+          imageDataUrl,
+          badgeText: cleanBadge,
+          subtitleText: cleanSubtitle
+        }
       })
     });
 
+    if (!bRes.ok) throw new Error(`Browserless returned error: ${bRes.status} ${bRes.statusText}`);
     const bData = await bRes.json();
     let imgBuffer;
     if (bData.pngBase64) {
@@ -230,12 +253,13 @@ app.post('/render-reel', async (req, res) => {
         imgBuffer = Buffer.from(bData.pngBase64, 'base64');
       }
     } else {
-      throw new Error('Failed to render template from Browserless');
+      throw new Error(`Failed to render template from Browserless: ${JSON.stringify(bData)}`);
     }
     fs.writeFileSync(tempImgPath, imgBuffer);
 
     console.log(`[${requestId}] 3. Downloading audio track from ${audioUrl}...`);
     const audRes = await fetch(audioUrl);
+    if (!audRes.ok) throw new Error(`Failed to download audio: ${audRes.status}`);
     const audArr = await audRes.arrayBuffer();
     fs.writeFileSync(tempAudPath, Buffer.from(audArr));
 
