@@ -178,10 +178,10 @@ app.post('/render-reel', async (req, res) => {
           ctx.fillText(subtitleText, W/2, y);
           const sw = ctx.measureText(subtitleText).width;
           ctx.strokeStyle = '#c9a227'; ctx.lineWidth = Math.max(2, W*0.0022);
-          const startX1 = W/2 - sw/2 - W*0.12;
+          const startX1 = W/2 - sw/2 - W*0.10;
           const endX1 = W/2 - sw/2 - W*0.03;
           const startX2 = W/2 + sw/2 + W*0.03;
-          const endX2 = W/2 + sw/2 + W*0.12;
+          const endX2 = W/2 + sw/2 + W*0.10;
           ctx.beginPath(); ctx.moveTo(startX1, y - sf*0.32); ctx.lineTo(endX1, y - sf*0.32); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(startX2, y - sf*0.32); ctx.lineTo(endX2, y - sf*0.32); ctx.stroke();
           ctx.textAlign = 'left';
@@ -227,7 +227,7 @@ app.post('/render-reel', async (req, res) => {
       const canvasEl = await page.$('#c');
       const screenshot = await canvasEl.screenshot({ type: 'png' });
       return { pngBase64: screenshot.toString('base64') };
-    };`;
+    };
 
     const bRes = await fetch(BROWSERLESS_URL, {
       method: "POST",
@@ -264,7 +264,7 @@ app.post('/render-reel', async (req, res) => {
     fs.writeFileSync(tempAudPath, Buffer.from(audArr));
 
     console.log(`[${requestId}] 4. Encoding 1080x1920 MP4 Reel with FFmpeg...`);
-    const ffmpegCmd = `ffmpeg -y -loop 1 -framerate 30 -i "${tempImgPath}" -i "${tempAudPath}" -c:v libx264 -preset ultrafast -crf 16 -pix_fmt yuv420p -c:a aac -b:a 320k -shortest "${outVideoPath}"`;
+    const ffmpegCmd = `ffmpeg -y -loop 1 -framerate 30 -i "${tempImgPath}" -i "${tempAudPath}" -c:v libx264 -preset ultrafast -tune stillimage -threads 2 -crf 18 -pix_fmt yuv420p -c:a aac -b:a 320k -shortest "${outVideoPath}"`;
     execSync(ffmpegCmd, { stdio: 'pipe' });
 
     console.log(`[${requestId}] 5. Sending MP4 video binary...`);
