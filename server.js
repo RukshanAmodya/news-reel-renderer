@@ -10,6 +10,7 @@ app.use(express.json({ limit: '50mb' }));
 
 const BROWSERLESS_URL = process.env.BROWSERLESS_URL || 'https://browserless-production-e0a9.up.railway.app/function?token=upId6SmxAji4Y1iwbpDi7IFjwuptENibN5wwRlaWMhObgn2C&timeout=180000';
 const DEFAULT_AUDIO_URL = process.env.AUDIO_URL || 'https://files.catbox.moe/rb1u7s.mp3';
+const DEFAULT_SLOGAN = "Dernière Heure • L'actualité en temps réel";
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
@@ -21,7 +22,7 @@ app.post('/render-reel', async (req, res) => {
     imageUrl,
     audioUrl = DEFAULT_AUDIO_URL,
     badgeText = 'FLASH INFO',
-    subtitleText = 'Dernière Heure'
+    subtitleText = DEFAULT_SLOGAN
   } = req.body;
 
   // Strict Validation: prevent empty or corrupted renders
@@ -34,7 +35,7 @@ app.post('/render-reel', async (req, res) => {
 
   const cleanTitle = title.trim();
   const cleanBadge = (badgeText || 'FLASH INFO').trim().toUpperCase();
-  const cleanSubtitle = (subtitleText || 'Dernière Heure').trim();
+  const cleanSubtitle = (subtitleText || DEFAULT_SLOGAN).trim();
 
   const requestId = Date.now() + '_' + Math.random().toString(36).substring(2, 7);
   const tempImgPath = path.join('/tmp', `img_${requestId}.png`);
@@ -48,7 +49,7 @@ app.post('/render-reel', async (req, res) => {
     const imgArr = await imgRes.arrayBuffer();
     const imageDataUrl = "data:image/jpeg;base64," + Buffer.from(imgArr).toString('base64');
 
-    console.log(`[${requestId}] 2. Rendering 1080x1920 Template D layout in Browserless...`);
+    console.log(`[${requestId}] 2. Rendering 1080x1920 Template D layout in Browserless [Category: ${cleanBadge}, Slogan: ${cleanSubtitle}]...`);
     const code = `export default async ({ page, context }) => {
       const { title, imageDataUrl, badgeText, subtitleText } = context;
 
@@ -170,18 +171,19 @@ app.post('/render-reel', async (req, res) => {
         let y = bottom;
 
         // Footer / Page Name with gold wings
-        if(subtitleText){
-          const sf = Math.round(W*0.033);
-          ctx.letterSpacing = '0.04em';
+        const sub = (subtitleText || "Dernière Heure • L'actualité en temps réel").trim();
+        if(sub){
+          const sf = Math.round(W*0.030);
+          ctx.letterSpacing = '0.03em';
           setFace(ctx, {family:HEAVY, weight:'700'}, sf);
           ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-          ctx.fillText(subtitleText, W/2, y);
-          const sw = ctx.measureText(subtitleText).width;
+          ctx.fillText(sub, W/2, y);
+          const sw = ctx.measureText(sub).width;
           ctx.strokeStyle = '#c9a227'; ctx.lineWidth = Math.max(2, W*0.0022);
-          const startX1 = W/2 - sw/2 - W*0.10;
-          const endX1 = W/2 - sw/2 - W*0.03;
-          const startX2 = W/2 + sw/2 + W*0.03;
-          const endX2 = W/2 + sw/2 + W*0.10;
+          const startX1 = W/2 - sw/2 - W*0.08;
+          const endX1 = W/2 - sw/2 - W*0.025;
+          const startX2 = W/2 + sw/2 + W*0.025;
+          const endX2 = W/2 + sw/2 + W*0.08;
           ctx.beginPath(); ctx.moveTo(startX1, y - sf*0.32); ctx.lineTo(endX1, y - sf*0.32); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(startX2, y - sf*0.32); ctx.lineTo(endX2, y - sf*0.32); ctx.stroke();
           ctx.textAlign = 'left';
@@ -206,20 +208,21 @@ app.post('/render-reel', async (req, res) => {
         drawLines(ctx, L, padX, y, 'left', '#ffffff', '#f0b429');
 
         // Dynamic Category Badge (Top Blue Pill)
-        if(badgeText){
-          const bs = Math.round(W*0.032);
+        const label = (badgeText || 'FLASH INFO').trim().toUpperCase();
+        if(label){
+          const bs = Math.round(W*0.030);
           const bh = bs*1.72;
           const by = y - H*0.028 - bh;
           ctx.letterSpacing = '0.08em';
           setFace(ctx, {family:HEAVY, weight:'800'}, bs);
-          const tw = ctx.measureText(badgeText).width;
+          const tw = ctx.measureText(label).width;
           const icon = bs*1.15, gap = bs*0.62, ph = bs*0.95;
           const bw = ph + icon + gap + tw + ph;
           ctx.fillStyle = '#123f70';
           ctx.beginPath(); ctx.roundRect(padX, by, bw, bh, bh*0.28); ctx.fill();
           calendarIcon(ctx, padX + ph, by + (bh - icon)/2, icon, '#ffffff');
           ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
-          ctx.fillText(badgeText, padX + ph + icon + gap, by + bh/2 + bs*0.04);
+          ctx.fillText(label, padX + ph + icon + gap, by + bh/2 + bs*0.04);
           ctx.textBaseline = 'alphabetic';
         }
       }, cleanTitle, imageDataUrl, cleanBadge, cleanSubtitle);
