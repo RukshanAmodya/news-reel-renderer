@@ -14,7 +14,7 @@ const DEFAULT_AUDIO_URL = process.env.AUDIO_URL || 'https://files.catbox.moe/rb1
 const DEFAULT_SLOGAN = "Dernière Heure • L'actualité en temps réel";
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'News Reel Renderer', version: '3.0.0 (3:4 portrait)', time: new Date().toISOString() });
+  res.json({ status: 'ok', service: 'News Reel Renderer', version: '3.1.0 (3:4 portrait + Base64 AI Image support)', time: new Date().toISOString() });
 });
 
 app.post('/render-reel', async (req, expressResponse) => {
@@ -29,8 +29,8 @@ app.post('/render-reel', async (req, expressResponse) => {
   if (!title || typeof title !== 'string' || title.trim().length === 0) {
     return expressResponse.status(400).json({ error: 'Valid title is required' });
   }
-  if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('http')) {
-    return expressResponse.status(400).json({ error: 'Valid imageUrl is required' });
+  if (!imageUrl || typeof imageUrl !== 'string' || (!imageUrl.startsWith('http') && !imageUrl.startsWith('data:image'))) {
+    return expressResponse.status(400).json({ error: 'Valid imageUrl (http or data:image) is required' });
   }
 
   const cleanTitle = title.trim();
@@ -43,13 +43,19 @@ app.post('/render-reel', async (req, expressResponse) => {
   const outVideoPath = path.join('/tmp', 'out_' + requestId + '.mp4');
 
   try {
-    console.log('[' + requestId + '] 1. Downloading image from ' + imageUrl + '...');
-    const imgRes = await fetch(imageUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-    });
-    if (!imgRes.ok) throw new Error('Image fetch failed with status ' + imgRes.status);
-    const imgArr = await imgRes.arrayBuffer();
-    const imageDataUrl = 'data:image/jpeg;base64,' + Buffer.from(imgArr).toString('base64');
+    let imageDataUrl = '';
+    if (imageUrl.startsWith('data:image')) {
+      console.log('[' + requestId + '] 1. Using provided Base64 Data URL Image...');
+      imageDataUrl = imageUrl;
+    } else {
+      console.log('[' + requestId + '] 1. Downloading image from ' + imageUrl + '...');
+      const imgRes = await fetch(imageUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+      });
+      if (!imgRes.ok) throw new Error('Image fetch failed with status ' + imgRes.status);
+      const imgArr = await imgRes.arrayBuffer();
+      imageDataUrl = 'data:image/jpeg;base64,' + Buffer.from(imgArr).toString('base64');
+    }
 
     console.log('[' + requestId + '] 2. Rendering 3:4 (1080x1440) Template D in Browserless...');
     const code = `export default async ({ page, context }) => {
@@ -88,12 +94,12 @@ app.post('/render-reel', async (req, expressResponse) => {
           ctx.drawImage(img, dx, dy, dw, dh);
         }
         function tokenize(text, hi){
-          const words = (text||'').trim().split(/\\\\s+/).filter(Boolean);
+          const words = (text||'').trim().split(/\\s+/).filter(Boolean);
           const out = words.map(w=>({w, hi:false}));
           const H = (hi||'').trim();
           if(!H) return out;
-          const norm = s => s.toUpperCase().replace(/[^\\\\p{L}\\\\p{N}]/gu,'');
-          const hw = H.split(/\\\\s+/).map(norm).filter(Boolean);
+          const norm = s => s.toUpperCase().replace(/[^\\p{L}\\p{N}]/gu,'');
+          const hw = H.split(/\\s+/).map(norm).filter(Boolean);
           if(!hw.length) return out;
           const nw = words.map(norm);
           outer: for(let i=0;i<=nw.length-hw.length;i++){
