@@ -14,10 +14,10 @@ const DEFAULT_AUDIO_URL = process.env.AUDIO_URL || 'https://files.catbox.moe/rb1
 const DEFAULT_SLOGAN = "Dernière Heure • L'actualité en temps réel";
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'News Reel Renderer', version: '2.1.0', time: new Date().toISOString() });
+  res.json({ status: 'ok', service: 'News Reel Renderer', version: '2.1.2', time: new Date().toISOString() });
 });
 
-app.post('/render-reel', async (req, res) => {
+app.post('/render-reel', async (req, expressResponse) => {
   const {
     title,
     imageUrl,
@@ -27,10 +27,10 @@ app.post('/render-reel', async (req, res) => {
   } = req.body;
 
   if (!title || typeof title !== 'string' || title.trim().length === 0) {
-    return res.status(400).json({ error: 'Valid title is required' });
+    return expressResponse.status(400).json({ error: 'Valid title is required' });
   }
   if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('http')) {
-    return res.status(400).json({ error: 'Valid imageUrl is required' });
+    return expressResponse.status(400).json({ error: 'Valid imageUrl is required' });
   }
 
   const cleanTitle = title.trim();
@@ -267,12 +267,12 @@ app.post('/render-reel', async (req, res) => {
 
     console.log('[' + requestId + '] 5. Sending video response...');
     const videoData = fs.readFileSync(outVideoPath);
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Content-Disposition', 'attachment; filename="reel.mp4"');
-    res.send(videoData);
+    expressResponse.setHeader('Content-Type', 'video/mp4');
+    expressResponse.setHeader('Content-Disposition', 'attachment; filename="reel.mp4"');
+    expressResponse.send(videoData);
   } catch (err) {
     console.error('[' + requestId + '] Error:', err);
-    res.status(500).json({ error: err.message });
+    expressResponse.status(500).json({ error: err.message });
   } finally {
     try { if (fs.existsSync(tempImgPath)) fs.unlinkSync(tempImgPath); } catch(e){}
     try { if (fs.existsSync(tempAudPath)) fs.unlinkSync(tempAudPath); } catch(e){}
