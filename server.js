@@ -172,7 +172,7 @@ app.post('/render-reel', async (req, res) => {
       const bottom = H - H*0.12;
       let y = bottom;
 
-      const sub = (subtitleText || "Dernière Heure • L'actualité en temps réel").trim();
+      const sub = (subtitleText || "Dernière Heure").trim();
       if(sub){
         const sf = Math.round(W*0.031);
         ctx.letterSpacing = '0.01em';
@@ -280,7 +280,13 @@ app.post('/render-reel', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
   console.log('🚀 News Reel Renderer Service running on port ' + PORT);
 });
+if (PORT != 3000) {
+  try { app.listen(3000, '0.0.0.0'); } catch(e){}
+}
+if (PORT != 8080) {
+  try { app.listen(8080, '0.0.0.0'); } catch(e){}
+}
