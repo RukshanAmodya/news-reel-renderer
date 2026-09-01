@@ -13,7 +13,7 @@ const DEFAULT_AUDIO_URL = process.env.AUDIO_URL || 'https://files.catbox.moe/rb1
 const DEFAULT_SLOGAN = "Dernière Heure • L'actualité en temps réel";
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
+  res.json({ status: 'ok', service: 'News Reel Renderer', version: '2.0.0', time: new Date().toISOString() });
 });
 
 app.post('/render-reel', async (req, res) => {
@@ -25,7 +25,6 @@ app.post('/render-reel', async (req, res) => {
     subtitleText = DEFAULT_SLOGAN
   } = req.body;
 
-  // Strict Validation: prevent empty or corrupted renders
   if (!title || typeof title !== 'string' || title.trim().length === 0) {
     return res.status(400).json({ error: 'Valid title is required' });
   }
@@ -44,9 +43,16 @@ app.post('/render-reel', async (req, res) => {
 
   try {
     console.log(`[${requestId}] 1. Downloading source image from ${imageUrl}...`);
-    const imgRes = await fetch(imageUrl);
-    if (!imgRes.ok) throw new Error(`Failed to fetch source image: ${imgRes.status} ${imgRes.statusText}`);
-    const imgArr = await imgRes.arrayBuffer();
+    let imgArr;
+    try {
+      const imgRes = await fetch(imageUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+      });
+      if (!imgRes.ok) throw new Error(`HTTP ${imgRes.status} ${imgRes.statusText}`);
+      imgArr = await imgRes.arrayBuffer();
+    } catch (e) {
+      throw new Error(`Failed to download source image: ${e.message}`);
+    }
     const imageDataUrl = "data:image/jpeg;base64," + Buffer.from(imgArr).toString('base64');
 
     console.log(`[${requestId}] 2. Rendering 1080x1920 Template D layout in Browserless [Category: ${cleanBadge}, Slogan: ${cleanSubtitle}]...`);
@@ -232,21 +238,29 @@ app.post('/render-reel', async (req, res) => {
       return { pngBase64: screenshot.toString('base64') };
     };
 
-    const bRes = await fetch(BROWSERLESS_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        code,
-        context: {
-          title: cleanTitle,
-          imageDataUrl,
-          badgeText: cleanBadge,
-          subtitleText: cleanSubtitle
-        }
-      })
-    });
+    let bRes;
+    try {
+      bRes = await fetch(BROWSERLESS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        },
+        body: JSON.stringify({
+          code,
+          context: {
+            title: cleanTitle,
+            imageDataUrl,
+            badgeText: cleanBadge,
+            subtitleText: cleanSubtitle
+          }
+        })
+      });
+    } catch (e) {
+      throw new Error(`Failed to contact Browserless service: ${e.message}`);
+    }
 
-    if (!bRes.ok) throw new Error(`Browserless returned error: ${bRes.status} ${bRes.statusText}`);
+    if (!bRes.ok) throw new Error(`Browserless error: ${bRes.status} ${bRes.statusText}`);
     const bData = await bRes.json();
     let imgBuffer;
     if (bData.pngBase64) {
@@ -261,13 +275,20 @@ app.post('/render-reel', async (req, res) => {
     fs.writeFileSync(tempImgPath, imgBuffer);
 
     console.log(`[${requestId}] 3. Downloading audio track from ${audioUrl}...`);
-    const audRes = await fetch(audioUrl);
-    if (!audRes.ok) throw new Error(`Failed to download audio: ${audRes.status}`);
-    const audArr = await audRes.arrayBuffer();
+    let audArr;
+    try {
+      const audRes = await fetch(audioUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+      });
+      if (!audRes.ok) throw new Error(`HTTP ${audRes.status} ${audRes.statusText}`);
+      audArr = await audRes.arrayBuffer();
+    } catch (e) {
+      throw new Error(`Failed to download audio: ${e.message}`);
+    }
     fs.writeFileSync(tempAudPath, Buffer.from(audArr));
 
     console.log(`[${requestId}] 4. Encoding 1080x1920 MP4 Reel with FFmpeg...`);
-    const ffmpegCmd = `ffmpeg -y -loop 1 -framerate 30 -i "${tempImgPath}" -i "${tempAudPath}" -c:v libx264 -preset ultrafast -tune stillimage -threads 2 -crf 18 -pix_fmt yuv420p -c:a aac -b:a 320k -shortest "${outVideoPath}"`;
+    const ffmpegCmd = `ffmpeg -y -loop 1 -framerate 30 -i "${tempImgPath}" -i "${tempAudPath}" -c:v libx264 -preset ultrafast -tune stillimage -threads 2 -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest "${outVideoPath}"`;
     execSync(ffmpegCmd, { stdio: 'pipe' });
 
     console.log(`[${requestId}] 5. Sending MP4 video binary...`);
